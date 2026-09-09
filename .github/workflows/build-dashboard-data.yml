@@ -1,0 +1,46 @@
+name: Build dashboard JSON
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "data/source/**/*.xlsx"
+      - "tools/build_dashboard_data.py"
+      - "tools/tasks.json"
+      - "tools/exchange_rates.json"
+      - ".github/workflows/build-dashboard-data.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-dashboard-data-main
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out data repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Convert all Excel history to dashboard JSON
+        run: python tools/build_dashboard_data.py data/source --output data/dashboard-data.json
+
+      - name: Commit generated dashboard data
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/dashboard-data.json
+          if git diff --cached --quiet; then
+            echo "Dashboard JSON is already current."
+            exit 0
+          fi
+          latest_date="$(python -c 'import json; print(max(item["date"] for item in json.load(open("data/dashboard-data.json", encoding="utf-8"))["datasets"]))')"
+          git commit -m "Build dashboard data ${latest_date}"
+          git push origin HEAD:main
