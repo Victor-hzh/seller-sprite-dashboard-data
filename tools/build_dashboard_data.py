@@ -38,6 +38,7 @@ CURRENCIES = {
     "FR": {"code": "EUR", "symbol": "€"},
     "IT": {"code": "EUR", "symbol": "€"},
     "ES": {"code": "EUR", "symbol": "€"},
+    "JP": {"code": "JPY", "symbol": "¥"},
 }
 
 
