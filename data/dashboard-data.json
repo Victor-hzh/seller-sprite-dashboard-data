@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-24T01:09:14+00:00",
+  "generatedAt": "2026-09-24T01:15:06+00:00",
   "exchangeRates": {
     "base": "CNY",
     "date": "2026-08-28",
@@ -11,12 +11,14 @@
       "CNY": 1,
       "USD": 6.720862,
       "GBP": 9.128675,
-      "EUR": 7.8251
+      "EUR": 7.8251,
+      "JPY": 0.042088533
     },
     "derivation": {
       "EUR": "ECB: 1 EUR = 7.8251 CNY",
       "USD": "7.8251 CNY / 1.1643 USD",
-      "GBP": "7.8251 CNY / 0.85720 GBP"
+      "GBP": "7.8251 CNY / 0.85720 GBP",
+      "JPY": "7.8251 CNY / 185.92 JPY"
     }
   },
   "opportunityModel": {
@@ -30,7 +32,7 @@
     "formula": "市场规模45% + 销量需求25% + 增长15% + 进入友好度15%",
     "note": "同品类至少接入2个站点后计算；所有金额先换算为人民币。"
   },
-  "expectedDatasetCount": 30,
+  "expectedDatasetCount": 35,
   "loadedDatasetCount": 35,
   "expectedDatasets": [
     {
@@ -301,6 +303,51 @@
       "categoryLabel": "吸尘器",
       "listName": "Aspiradoras escoba",
       "sourceUrl": "https://www.amazon.es/gp/bestsellers/kitchen/2165707031",
+      "available": true
+    },
+    {
+      "id": "JP_MITE_VACUUM",
+      "marketplace": "JP",
+      "category": "Mite-Vacuum",
+      "categoryLabel": "除螨仪",
+      "listName": "布団クリーナー",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/5248688051",
+      "available": true
+    },
+    {
+      "id": "JP_SPOT_CLEANER",
+      "marketplace": "JP",
+      "category": "Spot-Cleaner",
+      "categoryLabel": "布艺清洗机",
+      "listName": "スチームクリーナー",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/2466960051",
+      "available": true
+    },
+    {
+      "id": "JP_WET_DRY_FLOOR_WASHER",
+      "marketplace": "JP",
+      "category": "Wet-Dry-Floor-Washer",
+      "categoryLabel": "洗地机",
+      "listName": "ウェットドライショップ掃除機",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/diy/13698381",
+      "available": true
+    },
+    {
+      "id": "JP_ROBOT_VACUUM",
+      "marketplace": "JP",
+      "category": "Robot-Vacuum",
+      "categoryLabel": "扫地机器人",
+      "listName": "ロボット型クリーナー",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/2353758051",
+      "available": true
+    },
+    {
+      "id": "JP_STICK_VACUUM",
+      "marketplace": "JP",
+      "category": "Stick-Vacuum",
+      "categoryLabel": "吸尘器",
+      "listName": "スティッククリーナー",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/13698351",
       "available": true
     }
   ],
@@ -44254,15 +44301,15 @@
       "id": "JP_Wet-Dry-Floor-Washer_2026-09-23",
       "marketplace": "JP",
       "category": "Wet-Dry-Floor-Washer",
-      "categoryLabel": "Wet-Dry-Floor-Washer",
+      "categoryLabel": "洗地机",
       "listName": "ウェットドライショップ掃除機",
-      "sourceUrl": "",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/diy/13698381",
       "date": "2026-09-23",
       "topLimit": 50,
       "sourceFile": "BSR_JP_Wet-Dry-Floor-Washer_Top50_2026-09-23.xlsx",
       "currency": {
-        "code": "",
-        "symbol": ""
+        "code": "JPY",
+        "symbol": "¥"
       },
       "sheetNames": [
         "JP",
@@ -50021,15 +50068,15 @@
       "id": "JP_Stick-Vacuum_2026-09-23",
       "marketplace": "JP",
       "category": "Stick-Vacuum",
-      "categoryLabel": "Stick-Vacuum",
+      "categoryLabel": "吸尘器",
       "listName": "スティッククリーナー",
-      "sourceUrl": "",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/13698351",
       "date": "2026-09-23",
       "topLimit": 50,
       "sourceFile": "BSR_JP_Stick-Vacuum_Top50_2026-09-23.xlsx",
       "currency": {
-        "code": "",
-        "symbol": ""
+        "code": "JPY",
+        "symbol": "¥"
       },
       "sheetNames": [
         "JP",
@@ -56774,15 +56821,15 @@
       "id": "JP_Spot-Cleaner_2026-09-23",
       "marketplace": "JP",
       "category": "Spot-Cleaner",
-      "categoryLabel": "Spot-Cleaner",
-      "listName": "",
-      "sourceUrl": "",
+      "categoryLabel": "布艺清洗机",
+      "listName": "スチームクリーナー",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/2466960051",
       "date": "2026-09-23",
       "topLimit": 50,
       "sourceFile": "BSR_JP_Spot-Cleaner_Top50_2026-09-23.xlsx",
       "currency": {
-        "code": "",
-        "symbol": ""
+        "code": "JPY",
+        "symbol": "¥"
       },
       "sheetNames": [
         "JP",
@@ -61221,15 +61268,15 @@
       "id": "JP_Robot-Vacuum_2026-09-23",
       "marketplace": "JP",
       "category": "Robot-Vacuum",
-      "categoryLabel": "Robot-Vacuum",
-      "listName": "",
-      "sourceUrl": "",
+      "categoryLabel": "扫地机器人",
+      "listName": "ロボット型クリーナー",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/2353758051",
       "date": "2026-09-23",
       "topLimit": 50,
       "sourceFile": "BSR_JP_Robot-Vacuum_Top50_2026-09-23.xlsx",
       "currency": {
-        "code": "",
-        "symbol": ""
+        "code": "JPY",
+        "symbol": "¥"
       },
       "sheetNames": [
         "JP",
@@ -65666,15 +65713,15 @@
       "id": "JP_Mite-Vacuum_2026-09-23",
       "marketplace": "JP",
       "category": "Mite-Vacuum",
-      "categoryLabel": "Mite-Vacuum",
-      "listName": "",
-      "sourceUrl": "",
+      "categoryLabel": "除螨仪",
+      "listName": "布団クリーナー",
+      "sourceUrl": "https://www.amazon.co.jp/gp/bestsellers/kitchen/5248688051",
       "date": "2026-09-23",
       "topLimit": 50,
       "sourceFile": "BSR_JP_Mite-Vacuum_Top50_2026-09-23.xlsx",
       "currency": {
-        "code": "",
-        "symbol": ""
+        "code": "JPY",
+        "symbol": "¥"
       },
       "sheetNames": [
         "JP",
