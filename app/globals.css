@@ -325,6 +325,15 @@ footer { max-width: 1540px; margin: 0 auto; display: flex; justify-content: spac
 .metric-group-cards { display: grid; grid-template-columns: repeat(2, minmax(115px, 1fr)); gap: 7px; }
 .metric-cards .metric-more-button { grid-column: 1 / -1; min-height: 34px; display: flex; align-items: center; justify-content: center; color: var(--green); background: #fff; border-style: dashed; font-size: 9px; text-align: center; }
 .chart-insight { margin: -4px 16px 14px; color: #74817b; font-size: 8px; }
+.brand-price-heatmap-panel { max-width: 1540px; margin: 0 auto 16px; }
+.brand-price-heatmap { padding: 18px; overflow-x: auto; }
+.brand-price-heatmap-grid { min-width: 720px; display: grid; gap: 8px; margin-bottom: 8px; }
+.brand-price-heatmap-head > span, .brand-price-heatmap-head > strong, .brand-price-heatmap-row > strong, .brand-price-heatmap-row > span { min-height: 52px; display: flex; align-items: center; justify-content: center; padding: 9px 10px; text-align: center; border-radius: 5px; }
+.brand-price-heatmap-head > span, .brand-price-heatmap-head > strong { color: #6c5b52; background: #f3ebe5; border: 1px solid #e7d9cf; font-size: 12px; font-weight: 800; }
+.brand-price-heatmap-row > strong { justify-content: flex-start; color: #fff; background: #4a2113; font-size: 13px; }
+.brand-price-heatmap-row > span { border: 1px solid rgba(255,97,10,.18); font: 800 13px/1.2 ui-monospace, monospace; transition: transform .16s ease, box-shadow .16s ease; }
+.brand-price-heatmap-row > span:hover { position: relative; z-index: 2; transform: translateY(-1px); box-shadow: 0 7px 18px rgba(92,42,19,.16); }
+.brand-price-heatmap-empty { min-height: 160px; display: flex; align-items: center; justify-content: center; color: #7f8d87; font-size: 11px; background: #fcfaf8; border: 1px dashed #ded2ca; }
 .brand-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .brand-tools > span { color: #7f8d87; font-size: 8px; }
 .search-box { width: min(330px, 100%); height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #fff; border: 1px solid var(--line-strong); }
