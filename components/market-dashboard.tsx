@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Activity, ArrowDown, ArrowRightLeft, ArrowUp, BadgeCheck, BarChart3,
-  Building2, CalendarDays, ChevronDown, CircleDollarSign, Database, Download,
+  BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign, CircleHelp, Database, Download,
   ExternalLink, EyeOff, FileSpreadsheet, Filter, Gauge, History,
-  Info, Layers3, PackageSearch, RotateCcw, Search, ShoppingCart, Sparkles, Star,
-  Tags, TriangleAlert, Trophy, TrendingDown,
+  GitBranch, Info, Layers3, ListChecks, PackageSearch, RotateCcw, Scale, Search,
+  ShoppingCart, Sparkles, Star, Tags, TriangleAlert, Trophy, TrendingDown,
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer,
@@ -61,7 +61,7 @@ type DashboardPayload = {
   opportunityModel: { minimumMarketplaces: number; formula: string; note: string; weights: Record<string, number> };
 };
 type DisplayCurrency = "CNY" | "NATIVE";
-type PageKey = "tracker" | "overview" | "opportunity" | "brands" | "products" | "weekly" | "coverage";
+type PageKey = "tracker" | "overview" | "opportunity" | "brands" | "products" | "weekly" | "guide" | "coverage";
 type PriceMetric = "products" | "monthlySales" | "monthlyRevenue";
 type ProductMetricFilter = "all" | "bestSeller" | "amazonChoice" | "newRelease" | "coupon" | "aPlus" | "video" | "brandStory" | "spAds" | "brandAds";
 type BrandRow = {
@@ -169,9 +169,10 @@ const pageMeta: Record<PageKey, { index: string; label: string; title: string; d
   brands: { index: "03", label: "品牌", title: "品牌竞争分析", description: "集中查看品牌规模、份额、价格定位与品牌明细。", icon: Building2 },
   products: { index: "04", label: "产品", title: "Top N 产品监控", description: "按Amazon小类BSR前N名监控产品销售、价格、口碑、权益和明细。", icon: PackageSearch },
   weekly: { index: "05", label: "周度异动", title: "周度异动", description: "回答本周相比上周在排名、销售、价格、进出榜和权益上发生了什么。", icon: History },
-  coverage: { index: "06", label: "数据覆盖", title: "数据覆盖", description: "确认当前日期下各站点与品类的数据接入状态。", icon: Database },
+  guide: { index: "06", label: "数据指南", title: "数据指南", description: "说明数据颗粒度、筛选逻辑、指标口径、图表读法与使用边界。", icon: BookOpen },
+  coverage: { index: "07", label: "数据覆盖", title: "数据覆盖", description: "确认当前日期下各站点与品类的数据接入状态。", icon: Database },
 };
-const navigationOrder: PageKey[] = ["overview", "tracker", "opportunity", "brands", "products", "weekly"];
+const navigationOrder: PageKey[] = ["overview", "tracker", "opportunity", "brands", "products", "weekly", "guide"];
 
 function compact(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return "—";
@@ -1275,6 +1276,90 @@ export default function MarketDashboard() {
     </>;
   };
 
+  const GuidePage = () => {
+    const pageGuide = [
+      { index: "01", title: "总览", purpose: "快速判断市场规模与头部结构", focus: "月销量、月销售额、均价、品牌集中度、Top20销售额占比与本周重点变化", use: "周会开场、单站点单品类快速诊断" },
+      { index: "00", title: "榜单追踪", purpose: "还原Amazon小类榜单顺序", focus: "筛选后排名、原始排名、价格、评分、评价数、排名变化与商品链接", use: "查看具体竞品、临时排除非目标商品" },
+      { index: "02", title: "机会对比", purpose: "横向比较不同国家站点", focus: "市场规模、销量需求、增长、进入友好度与综合机会分", use: "站点优先级讨论；不是销量预测" },
+      { index: "03", title: "品牌", purpose: "理解品牌竞争格局", focus: "品牌销量/销售额排名、份额、价格定位、价格带热力图与品牌明细", use: "找头部品牌、价格空档和品牌定位" },
+      { index: "04", title: "产品", purpose: "监控Top N商品表现", focus: "价格带、价格×销量分布、权益/内容配置及完整商品字段", use: "选品、竞品拆解、内容与权益检查" },
+      { index: "05", title: "周度异动", purpose: "比较相邻两期快照", focus: "升降榜、销量/销售额/价格变化、进出榜与权益变化", use: "周报与异常定位；必须有上一期同口径数据" },
+      { index: "07", title: "数据覆盖", purpose: "检查数据是否齐全", focus: "日期×站点×品类是否已接入", use: "上传后验收，不用于业务判断" },
+    ];
+    const glossary = [
+      ["Amazon小类BSR", "商品在当前Amazon细分类目中的销售排名；数值越小越靠前", "榜单顺序与周度升降"],
+      ["筛选后排名", "临时隐藏非目标商品后重新连续编号；不改变Amazon原始名次", "聚焦真正竞品"],
+      ["月销量", "SellerSprite导出文件中的估算月销量；Top N图表通常为所选商品合计", "需求强弱与品牌份额"],
+      ["月销售额", "SellerSprite估算值；合计为当前筛选范围内商品月销售额之和", "市场规模、产品和品牌贡献"],
+      ["平均价格", "有有效价格商品的简单平均，不按销量加权", "价格定位；不等于成交均价"],
+      ["品牌数量", "当前Top N中去重后的品牌数；Unknown也可能来源于字段缺失", "竞争丰富度"],
+      ["品牌份额", "品牌月销量 ÷ 当前榜单Top N月销量合计", "判断品牌集中度"],
+      ["Top5品牌集中度", "月销售额最高的5个品牌销售额之和 ÷ 当前Top N总销售额", "判断头部垄断程度"],
+      ["Top20销售额占比", "原始榜单前20名销售额 ÷ 当前Top N销售额；Top10视图不计算", "判断头部商品集中度"],
+      ["评分 / 评价数", "当前评分与累计评价数；月新增评价为导出字段", "口碑与评论沉淀"],
+      ["一年内新品", "上架天数不超过365天", "判断新品进入速度"],
+      ["榜单权益", "Best Seller、Amazon's Choice、New Release、Coupon", "判断平台推荐与促销状态"],
+      ["内容配置", "A+页面、视频、品牌故事、SP广告、品牌广告等导出字段", "检查商品内容成熟度"],
+    ];
+    const formulas = [
+      ["排名变化", "上期BSR − 本期BSR", "正数表示上升，负数表示下降"],
+      ["指标变化率", "（本期值 − 上期值）÷ 上期值", "上期缺失或为0时显示暂无数据"],
+      ["品牌价格带单元格", "该品牌在该价格带内的月销量 ÷ 当前榜单Top N月销量", "颜色越深，占全榜单销量越高"],
+      ["进入友好度原值", "品牌分散度 × 65% ＋ 一年内新品占比 × 35%", "品牌越分散、新品越多，原值越高"],
+      ["综合机会分", "市场规模45%＋销量需求25%＋增长15%＋进入友好度15%", "各项先在当前所选站点中做0–100线性归一化"],
+      ["人民币换算", `站点原币金额 × 对应CNY汇率（汇率日 ${dashboardData.exchangeRates.date}）`, "跨站点页面强制统一人民币"],
+    ];
+    return <div className="guide-page">
+      <section className="guide-hero">
+        <div className="guide-hero-copy"><span>READ THIS FIRST</span><h2>先确认口径，再解释结果</h2><p>本看板分析的是指定日期、指定Amazon站点、指定细分类目下的Best Sellers Top N商品快照。它适合比较榜单结构、品牌竞争和商品变化，不代表Amazon全站销量，也不等同于财务审计口径。</p><nav className="guide-jump" aria-label="数据指南目录"><a href="#guide-grain">数据层级</a><a href="#guide-filters">筛选器</a><a href="#guide-pages">页面用途</a><a href="#guide-metrics">指标字典</a><a href="#guide-rules">计算规则</a><a href="#guide-quality">使用边界</a></nav></div>
+        <div className="guide-grain-card"><GitBranch /><small>最小分析单元</small><strong>1 个 ASIN × 1 个日期 × 1 个站点 × 1 个品类</strong><div><span>日期快照</span><i>→</i><span>站点</span><i>→</i><span>品类</span><i>→</i><span>Top N</span><i>→</i><span>ASIN</span></div><p>品牌、价格带和市场指标均由这一层逐级汇总。</p></div>
+      </section>
+
+      <section className="guide-panel" id="guide-grain"><PanelTitle index="01" title="数据颗粒度与汇总层级" note={`${marketplaces.length} 个站点 · ${categoryOptions.length} 个品类 · Top10/20/30/50`} /><div className="guide-levels">
+        <article><b>01</b><span>日期层</span><strong>一次采集快照</strong><p>每个数据日期代表一次导出结果。周度变化使用当前日期与此前最近一期同站点、同品类数据比较。</p></article>
+        <article><b>02</b><span>榜单层</span><strong>站点 × 品类</strong><p>一份榜单对应一个Amazon国家站点和一个细分类目。不同国家分类边界可能不同，不能默认完全同质。</p></article>
+        <article><b>03</b><span>视图层</span><strong>Top 10 / 20 / 30 / 50</strong><p>Top N决定参与计算的商品范围。切换Top N会同步改变合计、份额、均价、图表与综合评分。</p></article>
+        <article><b>04</b><span>商品层</span><strong>ASIN快照</strong><p>一行对应一个ASIN在该榜单当期的状态。同一ASIN跨站点或跨日期会作为不同快照参与分析。</p></article>
+        <article><b>05</b><span>聚合层</span><strong>品牌 / 价格带 / 站点</strong><p>品牌份额、价格分布和跨站点机会均由筛选后的ASIN集合汇总，不额外引入榜外商品。</p></article>
+      </div></section>
+
+      <section className="guide-panel" id="guide-filters"><PanelTitle index="02" title="全局筛选器怎么影响数据" note="除数据指南外，筛选条件在业务页面间同步" /><div className="guide-filter-grid">
+        <article><span>站点</span><strong>决定Amazon市场与原币</strong><p>美国USD、英国GBP、欧盟站EUR、日本JPY；“全部站点”仅在支持跨站点汇总的页面出现。</p></article>
+        <article><span>品类</span><strong>决定榜单边界</strong><p>除螨仪、布艺清洗机、洗地机、扫地机器人、吸尘器。各国Amazon类目并非完全一致。</p></article>
+        <article><span>数据日期</span><strong>决定当前快照</strong><p>选择本期数据；周度异动自动寻找此前最近一期同站点、同品类数据。</p></article>
+        <article><span>金额单位</span><strong>原币或统一人民币</strong><p>原币适合单站点观察；人民币适合跨站点横向比较。数量、评分和排名不受币种切换影响。</p></article>
+        <article><span>Top N</span><strong>决定所有汇总范围</strong><p>Top10/20/30/50不是分页，而是分析样本上限。多数KPI、份额与图表都会随之重新计算。</p></article>
+        <article><span>重置</span><strong>恢复默认分析状态</strong><p>清除搜索、品牌筛选、权益筛选和临时隐藏，并恢复默认站点、品类、日期、Top50与原币。</p></article>
+      </div></section>
+
+      <section className="guide-panel" id="guide-pages"><PanelTitle index="03" title="各页面解决什么问题" note="从问题出发选择页面，而不是逐页浏览" /><div className="guide-page-grid">{pageGuide.map((item) => <article key={item.title}><header><span>{item.index}</span><strong>{item.title}</strong></header><h3>{item.purpose}</h3><dl><div><dt>重点看</dt><dd>{item.focus}</dd></div><div><dt>适合用在</dt><dd>{item.use}</dd></div></dl></article>)}</div></section>
+
+      <section className="guide-panel" id="guide-metrics"><PanelTitle index="04" title="核心指标字典" note="定义 + 用途" /><div className="guide-table-wrap"><table className="guide-table"><thead><tr><th>指标</th><th>口径与定义</th><th>主要用途</th></tr></thead><tbody>{glossary.map((row) => <tr key={row[0]}><th>{row[0]}</th><td>{row[1]}</td><td>{row[2]}</td></tr>)}</tbody></table></div></section>
+
+      <section className="guide-panel"><PanelTitle index="05" title="图表怎么读" note="颜色用于区分与强调，不代表绝对好坏" /><div className="guide-chart-grid">
+        <article><BarChart3 /><strong>横向 / 纵向条形图</strong><p>比较不同品牌、商品、站点或价格带的绝对值及占比。条越长，当前指标越高。</p></article>
+        <article><CircleDollarSign /><strong>价格带图</strong><p>统一使用细分区间。USD/EUR/GBP在200以上继续拆分为200–249、250–299、300–349、350–399、400–499、500+；人民币与日元按相应尺度细分。</p></article>
+        <article><Layers3 /><strong>热力图</strong><p>颜色越深代表单元格贡献越高。品牌×价格段热力图固定最多展示月销量最高的5个品牌。</p></article>
+        <article><Activity /><strong>气泡 / 散点图</strong><p>横轴、纵轴与气泡大小分别代表不同指标。品牌定位图中：横轴月销量、纵轴均价、气泡大小月销售额。</p></article>
+        <article><History /><strong>周度变化图</strong><p>只比较两期都有或任一期出现的同一ASIN。新进榜和跌出榜按当前所选Top N边界判断。</p></article>
+        <article><EyeOff /><strong>临时隐藏与补位</strong><p>隐藏后该商品仅在本次浏览中排除，后续商品自动上移补位；刷新网页后恢复，不会改写源数据。</p></article>
+      </div></section>
+
+      <section className="guide-panel" id="guide-rules"><PanelTitle index="06" title="关键计算规则" note="看清分母和比较对象" /><div className="guide-formulas">{formulas.map((row) => <article key={row[0]}><Scale /><div><strong>{row[0]}</strong><code>{row[1]}</code><p>{row[2]}</p></div></article>)}</div></section>
+
+      <section className="guide-panel" id="guide-quality"><PanelTitle index="07" title="数据来源、缺失值与使用边界" note="结论输出前必须检查" /><div className="guide-quality-grid">
+        <article className="guide-quality-lead"><CircleHelp /><div><strong>看板是市场监控工具，不是财务审计系统</strong><p>销量、销售额、增长率等经营指标来自SellerSprite导出数据或其估算字段；Amazon BSR用于排名观察，两者都应结合类目口径、采集日期与业务经验解释。</p></div></article>
+        <article><ListChecks /><div><strong>类目边界</strong><p>部分国家没有完全对应的细分类目，页面出现橙色提示时，排名、商品覆盖和市场规模只能作为替代榜单参考。</p></div></article>
+        <article><ListChecks /><div><strong>缺失与Unknown</strong><p>“—”表示源文件缺少或无法计算；Unknown表示品牌字段未被可靠识别，不应直接当作真实品牌参与结论。</p></div></article>
+        <article><ListChecks /><div><strong>跨站点比较</strong><p>金额必须统一人民币，且应使用相同数据日期、品类和Top N。不同国家榜单定义仍可能造成结构偏差。</p></div></article>
+        <article><ListChecks /><div><strong>周度比较</strong><p>只有同站点、同品类且存在上一期快照时才计算；源数据字段异常会传导到变化率，因此异常峰值需回看商品详情与源文件。</p></div></article>
+        <article><ListChecks /><div><strong>价格与均价</strong><p>价格来自当期导出值，可能受促销或变体影响；平均价格是简单平均，不能解释为按销量加权的真实成交价。</p></div></article>
+      </div></section>
+
+      <section className="guide-workflow"><BookOpen /><div><span>推荐阅读顺序</span><strong>先看总览判断结构 → 用品牌页定位竞争者 → 用产品页验证具体ASIN → 用周度异动追踪变化 → 最后回到数据覆盖检查完整性</strong></div></section>
+    </div>;
+  };
+
   const CoveragePage = () => {
     const coveredForDate = dashboardData.datasets.filter((item) => item.date === date).length;
     return <>
@@ -1290,6 +1375,7 @@ export default function MarketDashboard() {
     if (activePage === "brands") return <BrandsPage />;
     if (activePage === "products") return <ProductsPage />;
     if (activePage === "weekly") return <WeeklyPage />;
+    if (activePage === "guide") return <GuidePage />;
     return <CoveragePage />;
   };
 
@@ -1305,10 +1391,10 @@ export default function MarketDashboard() {
       </aside>
       <main className="workspace">
         <header className="workspace-header"><div><div className="eyebrow">AMAZON MULTI-SITE MARKET RADAR</div><h1>清洁家电市场数据看板</h1><p>SellerSprite榜单数据 · 多站点市场洞察与Top N商品监控</p></div><div className="header-meta"><Badge variant="outline"><Database />已接入 {dashboardData.loadedDatasetCount} / {dashboardData.expectedDatasetCount} 份榜单</Badge><span>页面生成时间 {generatedAtLabel(dashboardData.generatedAt)}</span></div></header>
-        {FilterBar()}
-        {RankingAvailabilityWarning()}
+        {activePage !== "guide" && FilterBar()}
+        {activePage !== "guide" && RankingAvailabilityWarning()}
         {PageHeading()}
-        {DatasetBanner()}
+        {activePage !== "guide" && DatasetBanner()}
         {renderPage()}
         <footer><span>数据来源：SellerSprite导出文件 · 展示范围按Amazon小类BSR定义</span><span>汇率：{dashboardData.exchangeRates.source} · {dashboardData.exchangeRates.date}</span></footer>
       </main>
