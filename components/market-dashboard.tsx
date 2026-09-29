@@ -256,10 +256,10 @@ function aggregate(products: Product[], key: "brand" | "buyboxSeller"): BrandRow
 function priceBandDefinitions(dataset: Dataset, display: DisplayCurrency): PriceBand[] {
   const symbol = display === "CNY" ? "¥" : dataset.currency.symbol;
   const bounds = display === "CNY"
-    ? [0, 200, 400, 800, 1500, Number.POSITIVE_INFINITY]
+    ? [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 5000, 7000, Number.POSITIVE_INFINITY]
     : dataset.currency.code === "JPY"
-      ? [0, 5000, 10000, 15000, 20000, Number.POSITIVE_INFINITY]
-      : [0, 50, 100, 150, 200, Number.POSITIVE_INFINITY];
+      ? [0, 5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000, 50000, 70000, Number.POSITIVE_INFINITY]
+      : [0, 50, 100, 150, 200, 250, 300, 350, 400, 500, Number.POSITIVE_INFINITY];
   return bounds.slice(0, -1).map((min, index) => {
     const max = bounds[index + 1];
     return { min, max, label: index === bounds.length - 2 ? `${symbol}${min}+` : `${symbol}${min}–${max - 1}` };
@@ -267,12 +267,9 @@ function priceBandDefinitions(dataset: Dataset, display: DisplayCurrency): Price
 }
 function priceBands(products: Product[], dataset: Dataset, display: DisplayCurrency) {
   const multiplier = display === "CNY" ? cnyRate(dataset) : 1;
-  const symbol = display === "CNY" ? "¥" : dataset.currency.symbol;
-  const bounds = display === "CNY" ? [0, 200, 400, 800, 1500, Number.POSITIVE_INFINITY] : [0, 25, 50, 100, 200, Number.POSITIVE_INFINITY];
-  return bounds.slice(0, -1).map((min, index) => {
-    const max = bounds[index + 1];
-    const matches = products.filter((product) => product.price != null && product.price * multiplier >= min && product.price * multiplier < max);
-    return { name: index === bounds.length - 2 ? `${symbol}${min}+` : `${symbol}${min}–${max - 1}`, products: matches.length, monthlySales: sum(matches, "monthlySales"), monthlyRevenue: sum(matches, "monthlyRevenue") * multiplier };
+  return priceBandDefinitions(dataset, display).map((band) => {
+    const matches = products.filter((product) => product.price != null && product.price * multiplier >= band.min && product.price * multiplier < band.max);
+    return { name: band.label, products: matches.length, monthlySales: sum(matches, "monthlySales"), monthlyRevenue: sum(matches, "monthlyRevenue") * multiplier };
   });
 }
 function brandPriceHeatmap(products: Product[], dataset: Dataset, display: DisplayCurrency, limit = 5) {
@@ -1220,7 +1217,7 @@ export default function MarketDashboard() {
         <KpiCard icon={<Trophy />} tone="slate" label="Amazon's Choice" value={baseProducts.filter((item) => item.badges.amazonChoice).length} note="徽章覆盖商品" />
       </section>
       <section className="analysis-grid two-column">
-        <article className="chart-panel"><PanelTitle index="01" title={`各价格带${priceMetricLabels[priceMetric]}贡献`} note="可切换商品数 / 月销量 / 月销售额" action={<Select value={priceMetric} onValueChange={(value) => setPriceMetric(value as PriceMetric)}><SelectTrigger className="metric-select"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="products">商品数</SelectItem><SelectItem value="monthlySales">月销量</SelectItem><SelectItem value="monthlyRevenue">月销售额</SelectItem></SelectContent></Select>} /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={bandData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis tickFormatter={compact} /><Tooltip formatter={(value) => priceMetric === "monthlyRevenue" ? currency(Number(value), effectiveCurrency === "CNY" ? "CNY" : dataset.currency.code) : whole(Number(value))} /><Bar dataKey={priceMetric} fill="#f7b32b" radius={[3, 3, 0, 0]} /></BarChart></ResponsiveContainer></div></article>
+        <article className="chart-panel"><PanelTitle index="01" title={`各价格带${priceMetricLabels[priceMetric]}贡献`} note="使用统一细分价格段 · 可切换商品数 / 月销量 / 月销售额" action={<Select value={priceMetric} onValueChange={(value) => setPriceMetric(value as PriceMetric)}><SelectTrigger className="metric-select"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="products">商品数</SelectItem><SelectItem value="monthlySales">月销量</SelectItem><SelectItem value="monthlyRevenue">月销售额</SelectItem></SelectContent></Select>} /><div className="chart-box price-band-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={bandData} margin={{ bottom: 30 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" interval={0} angle={-35} textAnchor="end" height={58} tick={{ fontSize: 8 }} /><YAxis tickFormatter={compact} /><Tooltip formatter={(value) => priceMetric === "monthlyRevenue" ? currency(Number(value), effectiveCurrency === "CNY" ? "CNY" : dataset.currency.code) : whole(Number(value))} /><Bar dataKey={priceMetric} fill="#f7b32b" radius={[3, 3, 0, 0]} /></BarChart></ResponsiveContainer></div></article>
         <article className="chart-panel"><PanelTitle index="02" title="价格 × 月销量产品分布" note="气泡大小代表月销售额，颜色区分品牌；悬浮查看品牌与型号" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><ScatterChart><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" dataKey="x" name="价格" tickFormatter={compact} /><YAxis type="number" dataKey="y" name="月销量" tickFormatter={compact} /><ZAxis type="number" dataKey="z" range={[45, 500]} /><Tooltip content={<ProductScatterTooltip currencyCode={effectiveCurrency === "CNY" ? "CNY" : dataset.currency.code} />} /><Scatter data={scatterData}>{scatterData.map((item, index) => <Cell key={item.asin} fill={chartColors[(brandData.findIndex((brand) => brand.name === item.brand) + chartColors.length) % chartColors.length] ?? chartColors[index % chartColors.length]} />)}</Scatter></ScatterChart></ResponsiveContainer></div></article>
       </section>
       <section className="chart-panel metrics-panel"><PanelTitle index="03" title="榜单权益与内容配置" note="每项显示覆盖商品数与覆盖率；点击卡片筛选商品" /><div className="metric-cards"><button className={productMetricFilter === "all" ? "active" : ""} onClick={() => setProductMetricFilter("all")}><span>全部商品</span><strong>{baseProducts.length}</strong><small>覆盖率 100%</small></button><div className="metric-group"><div className="metric-group-title"><BadgeCheck /><span>榜单权益</span></div><div className="metric-group-cards">{visibleMetrics(badgeMetrics).map((item) => <MetricCard key={item.key} item={item} />)}</div></div><div className="metric-group"><div className="metric-group-title"><Layers3 /><span>内容配置</span></div><div className="metric-group-cards">{visibleMetrics(contentMetrics).map((item) => <MetricCard key={item.key} item={item} />)}</div></div>{zeroMetrics.length > 0 && <button className="metric-more-button" onClick={() => { if (showZeroMetrics && zeroMetrics.some((item) => item.key === productMetricFilter)) setProductMetricFilter("all"); setShowZeroMetrics((current) => !current); }}>{showZeroMetrics ? "收起零覆盖指标" : `更多指标（${zeroMetrics.length}）`}</button>}</div></section>
