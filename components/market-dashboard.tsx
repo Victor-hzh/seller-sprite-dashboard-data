@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Activity, ArrowDown, ArrowRightLeft, ArrowUp, BadgeCheck, BarChart3,
   Building2, CalendarDays, ChevronDown, CircleDollarSign, Database, Download,
@@ -9,7 +9,7 @@ import {
   Tags, TriangleAlert, Trophy, TrendingDown,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
+  Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer,
   Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
 } from "recharts";
 
@@ -69,6 +69,9 @@ type BrandRow = {
   priced: number; count: number; products: Product[]; averagePrice: number;
 };
 type BrandScatterPoint = BrandRow & { averagePriceCny: number; monthlyRevenueCny: number };
+type PriceBand = { label: string; min: number; max: number };
+type BrandPriceHeatmapCell = { share: number; sales: number; products: number };
+type BrandPriceHeatmapRow = { brand: string; cells: BrandPriceHeatmapCell[] };
 type OpportunityRow = {
   marketplace: string; marketplaceName: string; monthlyRevenueCny: number; monthlySales: number;
   averagePriceCny: number; brandCount: number; growth: number; entryFriendliness: number;
@@ -250,15 +253,50 @@ function aggregate(products: Product[], key: "brand" | "buyboxSeller"): BrandRow
   }
   return [...rows.values()].map((row) => ({ ...row, averagePrice: row.priced ? row.priceTotal / row.priced : 0 })).sort((a, b) => b.monthlySales - a.monthlySales);
 }
+function priceBandDefinitions(dataset: Dataset, display: DisplayCurrency): PriceBand[] {
+  const symbol = display === "CNY" ? "¥" : dataset.currency.symbol;
+  const bounds = display === "CNY"
+    ? [0, 200, 400, 800, 1500, Number.POSITIVE_INFINITY]
+    : dataset.currency.code === "JPY"
+      ? [0, 5000, 10000, 15000, 20000, Number.POSITIVE_INFINITY]
+      : [0, 50, 100, 150, 200, Number.POSITIVE_INFINITY];
+  return bounds.slice(0, -1).map((min, index) => {
+    const max = bounds[index + 1];
+    return { min, max, label: index === bounds.length - 2 ? `${symbol}${min}+` : `${symbol}${min}–${max - 1}` };
+  });
+}
 function priceBands(products: Product[], dataset: Dataset, display: DisplayCurrency) {
   const multiplier = display === "CNY" ? cnyRate(dataset) : 1;
-  const bounds = display === "CNY" ? [0, 200, 400, 800, 1500, Number.POSITIVE_INFINITY] : [0, 25, 50, 100, 200, Number.POSITIVE_INFINITY];
   const symbol = display === "CNY" ? "¥" : dataset.currency.symbol;
+  const bounds = display === "CNY" ? [0, 200, 400, 800, 1500, Number.POSITIVE_INFINITY] : [0, 25, 50, 100, 200, Number.POSITIVE_INFINITY];
   return bounds.slice(0, -1).map((min, index) => {
     const max = bounds[index + 1];
     const matches = products.filter((product) => product.price != null && product.price * multiplier >= min && product.price * multiplier < max);
     return { name: index === bounds.length - 2 ? `${symbol}${min}+` : `${symbol}${min}–${max - 1}`, products: matches.length, monthlySales: sum(matches, "monthlySales"), monthlyRevenue: sum(matches, "monthlyRevenue") * multiplier };
   });
+}
+function brandPriceHeatmap(products: Product[], dataset: Dataset, display: DisplayCurrency, limit = 5) {
+  const bands = priceBandDefinitions(dataset, display);
+  const totalSales = sum(products, "monthlySales");
+  const brands = aggregate(products, "brand")
+    .filter((brand) => brand.name && brand.name !== "Unknown")
+    .slice(0, limit);
+  const multiplier = display === "CNY" ? cnyRate(dataset) : 1;
+  const rows: BrandPriceHeatmapRow[] = brands.map((brand) => ({
+    brand: brand.name,
+    cells: bands.map((band) => {
+      const matches = brand.products.filter((product) => product.price != null && product.price * multiplier >= band.min && product.price * multiplier < band.max);
+      const sales = sum(matches, "monthlySales");
+      return { share: totalSales ? sales / totalSales : 0, sales, products: matches.length };
+    }),
+  }));
+  const maxShare = Math.max(...rows.flatMap((row) => row.cells.map((cell) => cell.share)), 0);
+  return { bands, rows, maxShare, totalSales };
+}
+function brandHeatCellStyle(value: number, maxValue: number): CSSProperties {
+  const intensity = maxValue > 0 ? Math.sqrt(value / maxValue) : 0;
+  const alpha = 0.08 + intensity * 0.88;
+  return { background: `rgba(255, 97, 10, ${alpha})`, color: intensity > 0.56 ? "#fff" : "#5a2b18" };
 }
 function normalizeMetric(rows: OpportunityRow[], getter: (row: OpportunityRow) => number) {
   const values = rows.map(getter); const min = Math.min(...values); const max = Math.max(...values);
@@ -1046,6 +1084,7 @@ export default function MarketDashboard() {
         if (brandSort === "share") return (b.monthlySales / Math.max(totalSales, 1)) - (a.monthlySales / Math.max(totalSales, 1));
         return b.monthlySales - a.monthlySales;
       });
+    const brandPriceHeatmapData = brandPriceHeatmap(baseProducts, dataset, effectiveCurrency, 5);
     const exportBrands = () => downloadCsv(
       `brands_${marketplace}_${category}_${date}.csv`,
       ["品牌", "商品数", "月销量", "月销售额", "平均价格", "月销量份额", "近一年销量", "近一年销售额"],
@@ -1062,11 +1101,51 @@ export default function MarketDashboard() {
       <section className="analysis-grid two-column">
         <article className="chart-panel"><PanelTitle index="01" title="品牌月销量排名" note="按月销量排序" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={brandData.slice(0, 10)} layout="vertical" margin={{ left: 8, right: 28 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={compact} /><YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 8 }} /><Tooltip formatter={(value) => whole(Number(value))} /><Bar dataKey="monthlySales" fill="#FF610A" /></BarChart></ResponsiveContainer></div></article>
         <article className="chart-panel"><PanelTitle index="02" title="品牌月销售额排名" note="按月销售额排序" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={revenueBrands.slice(0, 10)} layout="vertical" margin={{ left: 8, right: 28 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={compact} /><YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 8 }} /><Tooltip formatter={(value) => displayMoney(Number(value), dataset, effectiveCurrency)} /><Bar dataKey="monthlyRevenue" fill="#c54808" /></BarChart></ResponsiveContainer></div></article>
-        <article className="chart-panel"><PanelTitle index="03" title="品牌月销量份额" note={salesBrands.length > 8 ? "Top7品牌 + 其他品牌；悬浮查看占比" : "悬浮查看品牌月销量占比"} />{salesBrands.length > 8 ? <div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={brandShare} layout="vertical" margin={{ left: 8, right: 28 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={(value) => percent(Number(value), 0)} /><YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 8 }} /><Tooltip formatter={(value) => percent(Number(value))} /><Bar dataKey="value" name="月销量占比">{brandShare.map((item, index) => <Cell key={item.name} fill={item.name === "其他品牌" ? "#9aa7a1" : chartColors[index % chartColors.length]} />)}</Bar></BarChart></ResponsiveContainer></div> : <div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={brandShare} dataKey="value" nameKey="name" innerRadius={55} outerRadius={88}>{brandShare.map((item, index) => <Cell key={item.name} fill={chartColors[index % chartColors.length]} />)}</Pie><Tooltip formatter={(value) => percent(Number(value))} /></PieChart></ResponsiveContainer><div className="donut-label"><strong>{brandShare.length}</strong><span>品牌</span></div></div>}</article>
+        <article className="chart-panel"><PanelTitle index="03" title="品牌月销量份额" note="横向条形图 · 悬浮查看占比" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={brandShare} layout="vertical" margin={{ left: 8, right: 28 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={(value) => percent(Number(value), 0)} /><YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 8 }} /><Tooltip formatter={(value) => percent(Number(value))} /><Bar dataKey="value" name="月销量占比">{brandShare.map((item, index) => <Cell key={item.name} fill={item.name === "其他品牌" ? "#9aa7a1" : chartColors[index % chartColors.length]} />)}</Bar></BarChart></ResponsiveContainer></div></article>
         <article className="chart-panel"><PanelTitle index="04" title="品牌价格定位矩阵" note="横轴月销量 · 纵轴平均价格（人民币） · 气泡为月销售额（人民币）" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 12, right: 22, bottom: 8, left: 8 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" dataKey="monthlySales" name="月销量" tickFormatter={compact} /><YAxis type="number" dataKey="averagePriceCny" name="平均价格" tickFormatter={(value) => currency(Number(value), "CNY")} width={72} /><ZAxis type="number" dataKey="monthlyRevenueCny" name="月销售额" range={[70, 700]} /><Tooltip content={<BrandScatterTooltip />} /><Scatter data={brandScatterData}>{brandScatterData.map((item, index) => <Cell key={item.name} fill={brandBubbleColor(index)} fillOpacity={0.84} stroke="rgba(255,255,255,.9)" strokeWidth={1} />)}</Scatter></ScatterChart></ResponsiveContainer></div><p className="chart-insight">用于识别高销量、高客单与高销售额的重点品牌；悬浮气泡查看品牌详情。</p></article>
       </section>
+      <section className="chart-panel brand-price-heatmap-panel">
+        <PanelTitle index="05" title="品牌 × 价格段热力图" note={`最多显示 Top5 品牌 · 单元格为榜单月销量占比 · ${effectiveCurrency === "CNY" ? "人民币" : dataset.currency.code}`} />
+        <div className="brand-price-heatmap">
+          {brandPriceHeatmapData.rows.length === 0 ? (
+            <div className="brand-price-heatmap-empty">当前筛选下暂无可用于价格带分析的品牌数据</div>
+          ) : (
+            <>
+              <div
+                className="brand-price-heatmap-grid brand-price-heatmap-head"
+                style={{ gridTemplateColumns: `minmax(140px, 1.25fr) repeat(${brandPriceHeatmapData.bands.length}, minmax(110px, 1fr))` }}
+              >
+                <span>品牌 / 价格带</span>
+                {brandPriceHeatmapData.bands.map((band) => <strong key={band.label}>{band.label}</strong>)}
+              </div>
+              {brandPriceHeatmapData.rows.map((row) => (
+                <div
+                  className="brand-price-heatmap-grid brand-price-heatmap-row"
+                  key={row.brand}
+                  style={{ gridTemplateColumns: `minmax(140px, 1.25fr) repeat(${brandPriceHeatmapData.bands.length}, minmax(110px, 1fr))` }}
+                >
+                  <strong>{row.brand}</strong>
+                  {row.cells.map((cell, index) => {
+                    const band = brandPriceHeatmapData.bands[index];
+                    return (
+                      <span
+                        key={band.label}
+                        style={brandHeatCellStyle(cell.share, brandPriceHeatmapData.maxShare)}
+                        title={`${row.brand} · ${band.label}：${percent(cell.share, 2)} · 月销量 ${whole(cell.sales)} · 商品数 ${cell.products}`}
+                      >
+                        {percent(cell.share, 2)}
+                      </span>
+                    );
+                  })}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+        <p className="chart-insight">按当前 Top N 筛选商品计算；热力图固定最多显示月销量最高的 5 个品牌，单元格为该品牌在价格带内的月销量占全榜单月销量比例。</p>
+      </section>
       <section className="product-panel">
-        <PanelTitle index="05" title="品牌明细" note={`${filteredBrands.length} 个品牌`} action={<Button size="sm" variant="outline" onClick={exportBrands}><Download />导出 CSV</Button>} />
+        <PanelTitle index="06" title="品牌明细" note={`${filteredBrands.length} 个品牌`} action={<Button size="sm" variant="outline" onClick={exportBrands}><Download />导出 CSV</Button>} />
         <div className="table-toolbar brand-tools"><label className="search-box"><Search /><input value={brandSearch} onChange={(event) => setBrandSearch(event.target.value)} placeholder="搜索品牌" /></label><span>近一年销量与销售额：源Excel未提供，显示为 —</span><Select value={brandSort} onValueChange={(value) => setBrandSort(value as typeof brandSort)}><SelectTrigger className="sort-select"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sales">按月销量</SelectItem><SelectItem value="revenue">按月销售额</SelectItem><SelectItem value="price">按平均价格</SelectItem><SelectItem value="share">按市场份额</SelectItem></SelectContent></Select></div>
         <div className="product-table-wrap"><Table><TableHeader><TableRow><TableHead>品牌</TableHead><TableHead>商品数</TableHead><TableHead>月销量</TableHead><TableHead>月销售额</TableHead><TableHead>平均价格</TableHead><TableHead>市场份额</TableHead><TableHead>近一年销量</TableHead><TableHead>近一年销售额</TableHead><TableHead>查看</TableHead></TableRow></TableHeader><TableBody>{filteredBrands.map((item) => <TableRow key={item.name}><TableCell><strong>{item.name}</strong></TableCell><TableCell>{item.count}</TableCell><TableCell>{whole(item.monthlySales)}</TableCell><TableCell>{displayMoney(item.monthlyRevenue, dataset, effectiveCurrency)}</TableCell><TableCell>{displayMoney(item.averagePrice, dataset, effectiveCurrency)}</TableCell><TableCell>{percent(totalSales ? item.monthlySales / totalSales : 0)}</TableCell><TableCell>—</TableCell><TableCell>—</TableCell><TableCell><Button size="icon" variant="ghost" onClick={() => { setBrandFilter(item.name); activatePage("products"); }}><PackageSearch /></Button></TableCell></TableRow>)}</TableBody></Table></div>
       </section>
