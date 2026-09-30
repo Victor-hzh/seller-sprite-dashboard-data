@@ -44,6 +44,24 @@ npm run start
 
 仓库根目录的 `vercel.json` 已包含构建配置。以后 `main` 分支更新时，Vercel 会自动重新部署。仓库可以保持私有，无需为了 Vercel 改成公开。
 
+## 阿里云 OSS 部署
+
+项目使用 Next.js 静态导出，构建结果位于 `out/`。Windows 本地发布时：
+
+1. 在 PowerShell 中设置当前窗口临时环境变量（把占位内容替换为自己的 Key）：
+
+   ```powershell
+   $env:ALIYUN_OSS_ACCESS_KEY_ID="你的 AccessKey ID"
+   $env:ALIYUN_OSS_ACCESS_KEY_SECRET="你的 AccessKey Secret"
+   ```
+
+2. 在同一个 PowerShell 窗口运行 `./deploy_oss_windows.bat`。
+3. 脚本会先运行 `npm run build`，再把 `out/` 上传到北京地域的
+   `seller-sprite-dashboard` Bucket。
+
+上传会覆盖同名对象，但不会删除 OSS 中已有的其他对象。`index.html`
+会在静态资源之后上传并设置为不缓存；带哈希的 Next.js 静态资源会设置长期缓存。
+
 ## 数据更新流程
 
 网站构建时直接读取：
