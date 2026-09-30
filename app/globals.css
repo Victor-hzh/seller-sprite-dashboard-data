@@ -242,7 +242,7 @@ footer { max-width: 1540px; margin: 0 auto; display: flex; justify-content: spac
   .sheet-product { grid-template-columns: 72px 1fr; }.sheet-product img { width: 72px; height: 72px; }.raw-fields > div { grid-template-columns: 105px 1fr; }
   footer { flex-direction: column; }
   .guide-hero-copy, .guide-grain-card { padding: 26px 22px; }
-  .guide-levels, .guide-filter-grid, .guide-page-grid, .guide-chart-grid, .guide-formulas, .guide-quality-grid { grid-template-columns: 1fr; }
+  .guide-levels, .guide-filter-grid, .guide-page-grid, .guide-chart-grid, .guide-formulas, .guide-quality-grid, .guide-question-grid { grid-template-columns: 1fr; }
   .guide-quality-grid .guide-quality-lead { grid-column: auto; }
 }
 
@@ -431,6 +431,7 @@ footer { max-width: 1540px; margin: 0 auto; display: flex; justify-content: spac
 .guide-grain-card > p { margin: 3px 0 0; color: #d5a98f; font-size: 9px; line-height: 1.7; }
 .guide-panel { margin-bottom: 16px; background: #fff; border: 1px solid var(--line); }
 .guide-levels { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 18px; }
+.guide-levels.beginner-steps { grid-template-columns: repeat(4, 1fr); }
 .guide-levels article { position: relative; min-height: 180px; padding: 19px 16px 16px; background: #fcf8f5; border: 1px solid #ecdfd6; }
 .guide-levels article:not(:last-child)::after { content: "→"; position: absolute; top: 50%; right: -16px; z-index: 2; width: 20px; display: grid; place-items: center; color: var(--green); background: #fff; font-weight: 900; transform: translateY(-50%); }
 .guide-levels b { color: var(--green); font: 800 10px ui-monospace, monospace; }
@@ -459,6 +460,7 @@ footer { max-width: 1540px; margin: 0 auto; display: flex; justify-content: spac
 .guide-table tbody th { width: 180px; color: #4e2d1f; font-weight: 800; }
 .guide-table tbody td { color: #5f6e68; }
 .guide-table tbody td:last-child { width: 250px; color: #9b461f; }
+.guide-table.beginner-table tbody td:last-child { width: auto; color: #5f6e68; }
 .guide-chart-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 18px; }
 .guide-chart-grid article { min-height: 155px; display: grid; align-content: start; padding: 18px; background: #fcfaf8; border: 1px solid #eadfd7; }
 .guide-chart-grid svg { width: 21px; height: 21px; color: var(--green); }
@@ -484,6 +486,10 @@ footer { max-width: 1540px; margin: 0 auto; display: flex; justify-content: spac
 .guide-workflow svg { width: 30px; color: #ffc099; }
 .guide-workflow span { display: block; margin-bottom: 6px; color: #ffc7a7; font-size: 9px; }
 .guide-workflow strong { font-size: 13px; line-height: 1.8; }
+.guide-question-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 18px; }
+.guide-question-grid article { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 18px; background: #fcfaf8; border: 1px solid #eadfd7; }
+.guide-question-grid span { color: #5f6e68; font-size: 10px; line-height: 1.7; }
+.guide-question-grid strong { flex: none; color: #a33c09; font-size: 11px; }
 
 /* Shared-data Best Sellers tracker */
 .tracker-kpis { grid-template-columns: repeat(4, 1fr); }
