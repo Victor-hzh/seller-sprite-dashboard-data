@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Activity, ArrowDown, ArrowRightLeft, ArrowUp, BadgeCheck, BarChart3,
-  BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign, CircleHelp, Database, Download,
+  BookOpen, Building2, CalendarDays, ChevronDown, CircleDollarSign, Database, Download,
   ExternalLink, EyeOff, FileSpreadsheet, Filter, Gauge, History,
-  GitBranch, Info, Layers3, ListChecks, PackageSearch, RotateCcw, Scale, Search,
+  Info, Layers3, PackageSearch, RotateCcw, Search,
   ShoppingCart, Sparkles, Star, Tags, TriangleAlert, Trophy, TrendingDown,
 } from "lucide-react";
 import {
@@ -169,7 +169,7 @@ const pageMeta: Record<PageKey, { index: string; label: string; title: string; d
   brands: { index: "03", label: "品牌", title: "品牌竞争分析", description: "集中查看品牌规模、份额、价格定位与品牌明细。", icon: Building2 },
   products: { index: "04", label: "产品", title: "Top N 产品监控", description: "按Amazon小类BSR前N名监控产品销售、价格、口碑、权益和明细。", icon: PackageSearch },
   weekly: { index: "05", label: "周度异动", title: "周度异动", description: "回答本周相比上周在排名、销售、价格、进出榜和权益上发生了什么。", icon: History },
-  guide: { index: "06", label: "数据指南", title: "数据指南", description: "说明数据颗粒度、筛选逻辑、指标口径、图表读法与使用边界。", icon: BookOpen },
+  guide: { index: "06", label: "数据指南", title: "数据指南", description: "第一次使用时，从这里了解顶部选项和各个页面是做什么的。", icon: BookOpen },
   coverage: { index: "07", label: "数据覆盖", title: "数据覆盖", description: "确认当前日期下各站点与品类的数据接入状态。", icon: Database },
 };
 const navigationOrder: PageKey[] = ["overview", "tracker", "opportunity", "brands", "products", "weekly", "guide"];
@@ -228,6 +228,11 @@ function average(products: Product[], key: "price" | "rating") {
   const values = products.map((product) => product[key]).filter((value): value is number => value != null);
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
 }
+function weightedAveragePrice(products: Product[]) {
+  const monthlySales = sum(products, "monthlySales");
+  const monthlyRevenue = sum(products, "monthlyRevenue");
+  return monthlySales > 0 && monthlyRevenue > 0 ? monthlyRevenue / monthlySales : average(products, "price");
+}
 function cnyRate(dataset: Dataset) { return dashboardData.exchangeRates.cnyPerUnit[dataset.currency.code] ?? 1; }
 function converted(value: number | null | undefined, dataset: Dataset, display: DisplayCurrency) {
   if (value == null) return null;
@@ -252,7 +257,12 @@ function aggregate(products: Product[], key: "brand" | "buyboxSeller"): BrandRow
     current.products.push(product);
     rows.set(name, current);
   }
-  return [...rows.values()].map((row) => ({ ...row, averagePrice: row.priced ? row.priceTotal / row.priced : 0 })).sort((a, b) => b.monthlySales - a.monthlySales);
+  return [...rows.values()].map((row) => ({
+    ...row,
+    averagePrice: row.monthlySales > 0 && row.monthlyRevenue > 0
+      ? row.monthlyRevenue / row.monthlySales
+      : row.priced ? row.priceTotal / row.priced : 0,
+  })).sort((a, b) => b.monthlySales - a.monthlySales);
 }
 function priceBandDefinitions(dataset: Dataset, display: DisplayCurrency): PriceBand[] {
   const symbol = display === "CNY" ? "¥" : dataset.currency.symbol;
@@ -308,7 +318,7 @@ function opportunityRows(category: string, date: string, topN: number, includedM
     const growth = growthValues.length ? growthValues.reduce((total, value) => total + value, 0) / growthValues.length : 0;
     const newShare = products.length ? products.filter((product) => (product.listingDays ?? 99999) <= 365).length / products.length : 0;
     const concentration = totalSales ? (brands[0]?.monthlySales ?? 0) / totalSales : 1;
-    return { marketplace: item.marketplace, marketplaceName: marketplaceNames[item.marketplace] ?? item.marketplace, monthlyRevenueCny: sum(products, "monthlyRevenue") * cnyRate(item), monthlySales: totalSales, averagePriceCny: average(products, "price") * cnyRate(item), brandCount: brands.length, growth, entryFriendliness: (1 - concentration) * .65 + newShare * .35, topBrandConcentration: concentration, newProductShare: newShare, marketSizeScore: 0, salesDemandScore: 0, growthScore: 0, friendlinessScore: 0, score: 0, rank: 0, date: item.date };
+    return { marketplace: item.marketplace, marketplaceName: marketplaceNames[item.marketplace] ?? item.marketplace, monthlyRevenueCny: sum(products, "monthlyRevenue") * cnyRate(item), monthlySales: totalSales, averagePriceCny: weightedAveragePrice(products) * cnyRate(item), brandCount: brands.length, growth, entryFriendliness: (1 - concentration) * .65 + newShare * .35, topBrandConcentration: concentration, newProductShare: newShare, marketSizeScore: 0, salesDemandScore: 0, growthScore: 0, friendlinessScore: 0, score: 0, rank: 0, date: item.date };
   });
   if (!rows.length) return rows;
   const marketSize = normalizeMetric(rows, (row) => row.monthlyRevenueCny);
@@ -369,7 +379,7 @@ function EmptyDataset({ expected }: { expected?: ExpectedDataset }) {
 }
 function OpportunityTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: OpportunityRow }> }) {
   const row = payload?.[0]?.payload; if (!active || !row) return null;
-  return <div className="custom-tooltip"><strong>{row.marketplaceName}</strong><span>综合机会分 {row.score.toFixed(1)}</span><small>月销量 {whole(row.monthlySales)}</small><small>平均价格 {currency(row.averagePriceCny, "CNY")}</small><small>月销售额 {currency(row.monthlyRevenueCny, "CNY")}</small><small>市场规模评分 {row.marketSizeScore.toFixed(1)}</small><small>销量需求评分 {row.salesDemandScore.toFixed(1)}</small><small>增长评分 {row.growthScore.toFixed(1)}</small><small>进入友好度评分 {row.friendlinessScore.toFixed(1)}</small></div>;
+  return <div className="custom-tooltip"><strong>{row.marketplaceName}</strong><span>综合机会分 {row.score.toFixed(1)}</span><small>月销量 {whole(row.monthlySales)}</small><small>销量加权均价 {currency(row.averagePriceCny, "CNY")}</small><small>月销售额 {currency(row.monthlyRevenueCny, "CNY")}</small><small>市场规模评分 {row.marketSizeScore.toFixed(1)}</small><small>销量需求评分 {row.salesDemandScore.toFixed(1)}</small><small>增长评分 {row.growthScore.toFixed(1)}</small><small>进入友好度评分 {row.friendlinessScore.toFixed(1)}</small></div>;
 }
 function ProductScatterTooltip({ active, payload, currencyCode }: { active?: boolean; payload?: Array<{ payload: ProductScatterPoint }>; currencyCode: string }) {
   const product = payload?.[0]?.payload;
@@ -379,7 +389,7 @@ function ProductScatterTooltip({ active, payload, currencyCode }: { active?: boo
 function BrandScatterTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: BrandScatterPoint }> }) {
   const brand = payload?.[0]?.payload;
   if (!active || !brand) return null;
-  return <div className="custom-tooltip product-scatter-tooltip"><small>品牌</small><strong>{brand.name}</strong><span>月销量：{whole(brand.monthlySales)}</span><small>平均价格：{currency(brand.averagePriceCny, "CNY")}</small><small>月销售额：{currency(brand.monthlyRevenueCny, "CNY")}</small><small>榜单商品数：{whole(brand.count)}</small></div>;
+  return <div className="custom-tooltip product-scatter-tooltip"><small>品牌</small><strong>{brand.name}</strong><span>月销量：{whole(brand.monthlySales)}</span><small>销量加权均价：{currency(brand.averagePriceCny, "CNY")}</small><small>月销售额：{currency(brand.monthlyRevenueCny, "CNY")}</small><small>榜单商品数：{whole(brand.count)}</small></div>;
 }
 function brandBubbleColor(index: number) {
   return brandBubbleColors[index % brandBubbleColors.length];
@@ -955,7 +965,7 @@ export default function MarketDashboard() {
       <section className="kpi-grid">
         <KpiCard icon={<ShoppingCart />} tone="green" label="月销量" value={whole(overviewTotalSales)} note={<>{`${isOverviewAllSites ? `${overviewDatasets.length}个站点 · 各站点` : "当前"}Top${topN}合计 · `}{trendText(salesRate)}</>} />
         <KpiCard icon={<CircleDollarSign />} tone="gold" label="月销售额" value={overviewMoney(overviewTotalRevenue)} note={<>{`${isOverviewAllSites ? "人民币 CNY" : effectiveCurrency === "CNY" ? "CNY" : overviewDatasets[0].currency.code}口径 · `}{trendText(revenueRate)}</>} />
-        <KpiCard icon={<Tags />} tone="blue" label="平均价格" value={overviewMoney(average(overviewProducts, "price"))} note={`${validPriceCount} 个有效价格样本`} />
+        <KpiCard icon={<Tags />} tone="blue" label="销量加权均价" value={overviewMoney(weightedAveragePrice(overviewProducts))} note={`${validPriceCount} 个有效价格样本 · 月销售额 ÷ 月销量`} />
         <KpiCard icon={<PackageSearch />} tone="violet" label="有效商品" value={whole(overviewProducts.length)} note={`${overviewProducts.filter((item) => item.asin).length} 个有效ASIN · ${isOverviewAllSites ? "各站点" : ""}Top${topN}`} />
         <KpiCard icon={<Building2 />} tone="coral" label="品牌数量" value={whole(overviewBrandData.length)} note={`Top5品牌销售额集中度 ${percent(top5Concentration)}`} />
         <KpiCard icon={<Layers3 />} tone="slate" label="Top20销售额占比" value={topN >= 20 ? percent(overviewTotalRevenue ? overviewTop20Revenue / overviewTotalRevenue : 0) : "—"} note={topN >= 20 ? "衡量各站点头部商品集中度" : "请切换至Top20 / 30 / 50查看"} />
@@ -1036,7 +1046,7 @@ export default function MarketDashboard() {
         {[
           { index: "01", title: "月销售额规模", key: "monthlyRevenueCny" as const, color: "#FF610A", formatter: (value: number) => currency(value, "CNY") },
           { index: "02", title: "月销量需求", key: "monthlySales" as const, color: "#c54808", formatter: whole },
-          { index: "03", title: "平均价格", key: "averagePriceCny" as const, color: "#f7b32b", formatter: (value: number) => currency(value, "CNY") },
+          { index: "03", title: "销量加权均价", key: "averagePriceCny" as const, color: "#f7b32b", formatter: (value: number) => currency(value, "CNY") },
           { index: "04", title: "品牌数量", key: "brandCount" as const, color: "#e04a2f", formatter: whole },
         ].map((metric) => {
           const chartRows = [...opportunities].sort((left, right) => Number(right[metric.key]) - Number(left[metric.key]));
@@ -1052,7 +1062,6 @@ export default function MarketDashboard() {
             {categoryOptions.map((cat) => <div className={`heatmap-row ${cat.value === category ? "selected-category" : ""}`} key={cat.value} style={{ gridTemplateColumns: `150px repeat(${selectedMarkets.length}, minmax(130px, 1fr))` }}><strong>{cat.label}</strong>{selectedMarkets.map((market) => { const cell = heatValues.find((item) => item.marketplace === market && item.category === cat.value); const value = cell?.value ?? 0; return <span key={market} className={focusedOpportunityMarket === market ? "focused" : ""} style={heatCellStyle(value)} title={`${marketplaceNames[market] ?? market} · ${cat.label}：${currency(value, "CNY")}`}>{compact(value)}</span>; })}</div>)}
           </div>
         </article>
-        <article className="chart-panel"><PanelTitle index="06" title="品类机会气泡图" note="横轴月销量 · 纵轴平均价格（人民币） · 气泡为月销售额" /><div className="chart-box tall"><ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ left: 8, right: 22, top: 12 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" dataKey="monthlySales" name="月销量" tickFormatter={compact} /><YAxis type="number" dataKey="averagePriceCny" name="平均价格" tickFormatter={(value) => currency(Number(value), "CNY")} /><ZAxis type="number" dataKey="monthlyRevenueCny" name="月销售额" range={[90, 850]} /><Tooltip content={<OpportunityTooltip />} /><Scatter data={opportunities} onClick={(entry) => setFocusedOpportunityMarket(String(entry?.payload?.marketplace ?? ""))}>{opportunities.map((row, index) => <Cell key={row.marketplace} fill={focusedOpportunityMarket ? (row.marketplace === focusedOpportunityMarket ? "#f7b32b" : chartColors[index % chartColors.length]) : chartColors[index % chartColors.length]} fillOpacity={focusedOpportunityMarket && row.marketplace !== focusedOpportunityMarket ? .32 : .88} />)}</Scatter></ScatterChart></ResponsiveContainer></div></article>
       </section>
       {selectedDatasets.length === 0 && <EmptyDataset expected={expectedSelection} />}
     </>;
@@ -1085,7 +1094,7 @@ export default function MarketDashboard() {
     const brandPriceHeatmapData = brandPriceHeatmap(baseProducts, dataset, effectiveCurrency, 5);
     const exportBrands = () => downloadCsv(
       `brands_${marketplace}_${category}_${date}.csv`,
-      ["品牌", "商品数", "月销量", "月销售额", "平均价格", "月销量份额", "近一年销量", "近一年销售额"],
+      ["品牌", "商品数", "月销量", "月销售额", "销量加权均价", "月销量份额", "近一年销量", "近一年销售额"],
       filteredBrands.map((item) => [item.name, item.count, item.monthlySales, item.monthlyRevenue, item.averagePrice, totalSales ? item.monthlySales / totalSales : 0, "", ""]),
     );
     return <>
@@ -1100,7 +1109,7 @@ export default function MarketDashboard() {
         <article className="chart-panel"><PanelTitle index="01" title="品牌月销量排名" note="按月销量排序" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={brandData.slice(0, 10)} layout="vertical" margin={{ left: 8, right: 28 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={compact} /><YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 8 }} /><Tooltip formatter={(value) => whole(Number(value))} /><Bar dataKey="monthlySales" fill="#FF610A" /></BarChart></ResponsiveContainer></div></article>
         <article className="chart-panel"><PanelTitle index="02" title="品牌月销售额排名" note="按月销售额排序" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={revenueBrands.slice(0, 10)} layout="vertical" margin={{ left: 8, right: 28 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={compact} /><YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 8 }} /><Tooltip formatter={(value) => displayMoney(Number(value), dataset, effectiveCurrency)} /><Bar dataKey="monthlyRevenue" fill="#c54808" /></BarChart></ResponsiveContainer></div></article>
         <article className="chart-panel"><PanelTitle index="03" title="品牌月销量份额" note="横向条形图 · 悬浮查看占比" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><BarChart data={brandShare} layout="vertical" margin={{ left: 8, right: 28 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tickFormatter={(value) => percent(Number(value), 0)} /><YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 8 }} /><Tooltip formatter={(value) => percent(Number(value))} /><Bar dataKey="value" name="月销量占比">{brandShare.map((item, index) => <Cell key={item.name} fill={item.name === "其他品牌" ? "#9aa7a1" : chartColors[index % chartColors.length]} />)}</Bar></BarChart></ResponsiveContainer></div></article>
-        <article className="chart-panel"><PanelTitle index="04" title="品牌价格定位矩阵" note="横轴月销量 · 纵轴平均价格（人民币） · 气泡为月销售额（人民币）" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 12, right: 22, bottom: 8, left: 8 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" dataKey="monthlySales" name="月销量" tickFormatter={compact} /><YAxis type="number" dataKey="averagePriceCny" name="平均价格" tickFormatter={(value) => currency(Number(value), "CNY")} width={72} /><ZAxis type="number" dataKey="monthlyRevenueCny" name="月销售额" range={[70, 700]} /><Tooltip content={<BrandScatterTooltip />} /><Scatter data={brandScatterData}>{brandScatterData.map((item, index) => <Cell key={item.name} fill={brandBubbleColor(index)} fillOpacity={0.84} stroke="rgba(255,255,255,.9)" strokeWidth={1} />)}</Scatter></ScatterChart></ResponsiveContainer></div><p className="chart-insight">用于识别高销量、高客单与高销售额的重点品牌；悬浮气泡查看品牌详情。</p></article>
+        <article className="chart-panel"><PanelTitle index="04" title="品牌价格定位矩阵" note="横轴月销量 · 纵轴销量加权均价（人民币） · 气泡为月销售额（人民币）" /><div className="chart-box"><ResponsiveContainer width="100%" height="100%"><ScatterChart margin={{ top: 12, right: 22, bottom: 8, left: 8 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" dataKey="monthlySales" name="月销量" tickFormatter={compact} /><YAxis type="number" dataKey="averagePriceCny" name="销量加权均价" tickFormatter={(value) => currency(Number(value), "CNY")} width={72} /><ZAxis type="number" dataKey="monthlyRevenueCny" name="月销售额" range={[70, 700]} /><Tooltip content={<BrandScatterTooltip />} /><Scatter data={brandScatterData}>{brandScatterData.map((item, index) => <Cell key={item.name} fill={brandBubbleColor(index)} fillOpacity={0.84} stroke="rgba(255,255,255,.9)" strokeWidth={1} />)}</Scatter></ScatterChart></ResponsiveContainer></div><p className="chart-insight">用于识别高销量、高客单与高销售额的重点品牌；加权均价按月销售额 ÷ 月销量计算。</p></article>
       </section>
       <section className="chart-panel brand-price-heatmap-panel">
         <PanelTitle index="05" title="品牌 × 价格段热力图" note={`最多显示 Top5 品牌 · 单元格为榜单月销量占比 · ${effectiveCurrency === "CNY" ? "人民币" : dataset.currency.code}`} />
@@ -1144,8 +1153,8 @@ export default function MarketDashboard() {
       </section>
       <section className="product-panel">
         <PanelTitle index="06" title="品牌明细" note={`${filteredBrands.length} 个品牌`} action={<Button size="sm" variant="outline" onClick={exportBrands}><Download />导出 CSV</Button>} />
-        <div className="table-toolbar brand-tools"><label className="search-box"><Search /><input value={brandSearch} onChange={(event) => setBrandSearch(event.target.value)} placeholder="搜索品牌" /></label><span>近一年销量与销售额：源Excel未提供，显示为 —</span><Select value={brandSort} onValueChange={(value) => setBrandSort(value as typeof brandSort)}><SelectTrigger className="sort-select"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sales">按月销量</SelectItem><SelectItem value="revenue">按月销售额</SelectItem><SelectItem value="price">按平均价格</SelectItem><SelectItem value="share">按市场份额</SelectItem></SelectContent></Select></div>
-        <div className="product-table-wrap"><Table><TableHeader><TableRow><TableHead>品牌</TableHead><TableHead>商品数</TableHead><TableHead>月销量</TableHead><TableHead>月销售额</TableHead><TableHead>平均价格</TableHead><TableHead>市场份额</TableHead><TableHead>近一年销量</TableHead><TableHead>近一年销售额</TableHead><TableHead>查看</TableHead></TableRow></TableHeader><TableBody>{filteredBrands.map((item) => <TableRow key={item.name}><TableCell><strong>{item.name}</strong></TableCell><TableCell>{item.count}</TableCell><TableCell>{whole(item.monthlySales)}</TableCell><TableCell>{displayMoney(item.monthlyRevenue, dataset, effectiveCurrency)}</TableCell><TableCell>{displayMoney(item.averagePrice, dataset, effectiveCurrency)}</TableCell><TableCell>{percent(totalSales ? item.monthlySales / totalSales : 0)}</TableCell><TableCell>—</TableCell><TableCell>—</TableCell><TableCell><Button size="icon" variant="ghost" onClick={() => { setBrandFilter(item.name); activatePage("products"); }}><PackageSearch /></Button></TableCell></TableRow>)}</TableBody></Table></div>
+        <div className="table-toolbar brand-tools"><label className="search-box"><Search /><input value={brandSearch} onChange={(event) => setBrandSearch(event.target.value)} placeholder="搜索品牌" /></label><span>近一年销量与销售额：源Excel未提供，显示为 —</span><Select value={brandSort} onValueChange={(value) => setBrandSort(value as typeof brandSort)}><SelectTrigger className="sort-select"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sales">按月销量</SelectItem><SelectItem value="revenue">按月销售额</SelectItem><SelectItem value="price">按加权均价</SelectItem><SelectItem value="share">按市场份额</SelectItem></SelectContent></Select></div>
+        <div className="product-table-wrap"><Table><TableHeader><TableRow><TableHead>品牌</TableHead><TableHead>商品数</TableHead><TableHead>月销量</TableHead><TableHead>月销售额</TableHead><TableHead>销量加权均价</TableHead><TableHead>市场份额</TableHead><TableHead>近一年销量</TableHead><TableHead>近一年销售额</TableHead><TableHead>查看</TableHead></TableRow></TableHeader><TableBody>{filteredBrands.map((item) => <TableRow key={item.name}><TableCell><strong>{item.name}</strong></TableCell><TableCell>{item.count}</TableCell><TableCell>{whole(item.monthlySales)}</TableCell><TableCell>{displayMoney(item.monthlyRevenue, dataset, effectiveCurrency)}</TableCell><TableCell>{displayMoney(item.averagePrice, dataset, effectiveCurrency)}</TableCell><TableCell>{percent(totalSales ? item.monthlySales / totalSales : 0)}</TableCell><TableCell>—</TableCell><TableCell>—</TableCell><TableCell><Button size="icon" variant="ghost" onClick={() => { setBrandFilter(item.name); activatePage("products"); }}><PackageSearch /></Button></TableCell></TableRow>)}</TableBody></Table></div>
       </section>
     </>;
   };
@@ -1211,7 +1220,7 @@ export default function MarketDashboard() {
     return <>
       <section className="kpi-grid">
         <KpiCard icon={<PackageSearch />} tone="green" label="有效商品" value={baseProducts.length} note={`Amazon小类BSR Top${topN}`} />
-        <KpiCard icon={<Tags />} tone="gold" label="平均价格" value={displayMoney(average(baseProducts, "price"), dataset, effectiveCurrency)} note="有效价格简单平均" />
+        <KpiCard icon={<Tags />} tone="gold" label="销量加权均价" value={displayMoney(weightedAveragePrice(baseProducts), dataset, effectiveCurrency)} note="月销售额 ÷ 月销量" />
         <KpiCard icon={<Star />} tone="blue" label="平均评分" value={average(baseProducts, "rating").toFixed(1)} note="有效评分简单平均" />
         <KpiCard icon={<Sparkles />} tone="violet" label="一年内新品" value={newProducts} note="上架不超过365天" />
         <KpiCard icon={<BadgeCheck />} tone="coral" label="Best Seller" value={baseProducts.filter((item) => item.badges.bestSeller).length} note="徽章覆盖商品" />
@@ -1278,85 +1287,72 @@ export default function MarketDashboard() {
 
   const GuidePage = () => {
     const pageGuide = [
-      { index: "01", title: "总览", purpose: "快速判断市场规模与头部结构", focus: "月销量、月销售额、均价、品牌集中度、Top20销售额占比与本周重点变化", use: "周会开场、单站点单品类快速诊断" },
-      { index: "00", title: "榜单追踪", purpose: "还原Amazon小类榜单顺序", focus: "筛选后排名、原始排名、价格、评分、评价数、排名变化与商品链接", use: "查看具体竞品、临时排除非目标商品" },
-      { index: "02", title: "机会对比", purpose: "横向比较不同国家站点", focus: "市场规模、销量需求、增长、进入友好度与综合机会分", use: "站点优先级讨论；不是销量预测" },
-      { index: "03", title: "品牌", purpose: "理解品牌竞争格局", focus: "品牌销量/销售额排名、份额、价格定位、价格带热力图与品牌明细", use: "找头部品牌、价格空档和品牌定位" },
-      { index: "04", title: "产品", purpose: "监控Top N商品表现", focus: "价格带、价格×销量分布、权益/内容配置及完整商品字段", use: "选品、竞品拆解、内容与权益检查" },
-      { index: "05", title: "周度异动", purpose: "比较相邻两期快照", focus: "升降榜、销量/销售额/价格变化、进出榜与权益变化", use: "周报与异常定位；必须有上一期同口径数据" },
-      { index: "07", title: "数据覆盖", purpose: "检查数据是否齐全", focus: "日期×站点×品类是否已接入", use: "上传后验收，不用于业务判断" },
+      { index: "01", title: "总览", purpose: "先快速看懂这个市场", focus: "市场大不大、平均价格多少、有哪些主要品牌、哪些商品卖得好", use: "第一次打开看板时，建议先看这里" },
+      { index: "00", title: "榜单追踪", purpose: "按Amazon榜单顺序看具体商品", focus: "商品排第几、价格多少、评价怎么样、排名有没有上升或下降", use: "想找某个竞品，或者想打开Amazon商品页时" },
+      { index: "02", title: "机会对比", purpose: "把不同国家放在一起比较", focus: "哪个国家销量更高、销售额更大、价格更高、综合机会更好", use: "想决定先关注哪个国家市场时" },
+      { index: "03", title: "品牌", purpose: "看各个品牌在市场里的表现", focus: "谁卖得最多、谁销售额最高、各品牌主要卖什么价格", use: "想研究Tineco、Bissell、Shark等品牌时" },
+      { index: "04", title: "产品", purpose: "看每一个商品的详细表现", focus: "价格、销量、销售额、评分、评价数、上架时间和页面内容", use: "想做具体竞品分析或选品时" },
+      { index: "05", title: "周度异动", purpose: "看这次数据和上次相比发生了什么", focus: "哪些商品排名上升、哪些下降、哪些新进榜、哪些跌出榜", use: "做每周市场复盘时" },
+      { index: "07", title: "数据覆盖", purpose: "看哪些站点和品类已经有数据", focus: "哪些格子已经接入，哪些还没有上传", use: "更新数据后检查是否成功时" },
     ];
     const glossary = [
-      ["Amazon小类BSR", "商品在当前Amazon细分类目中的销售排名；数值越小越靠前", "榜单顺序与周度升降"],
-      ["筛选后排名", "临时隐藏非目标商品后重新连续编号；不改变Amazon原始名次", "聚焦真正竞品"],
-      ["月销量", "SellerSprite导出文件中的估算月销量；Top N图表通常为所选商品合计", "需求强弱与品牌份额"],
-      ["月销售额", "SellerSprite估算值；合计为当前筛选范围内商品月销售额之和", "市场规模、产品和品牌贡献"],
-      ["平均价格", "有有效价格商品的简单平均，不按销量加权", "价格定位；不等于成交均价"],
-      ["品牌数量", "当前Top N中去重后的品牌数；Unknown也可能来源于字段缺失", "竞争丰富度"],
-      ["品牌份额", "品牌月销量 ÷ 当前榜单Top N月销量合计", "判断品牌集中度"],
-      ["Top5品牌集中度", "月销售额最高的5个品牌销售额之和 ÷ 当前Top N总销售额", "判断头部垄断程度"],
-      ["Top20销售额占比", "原始榜单前20名销售额 ÷ 当前Top N销售额；Top10视图不计算", "判断头部商品集中度"],
-      ["评分 / 评价数", "当前评分与累计评价数；月新增评价为导出字段", "口碑与评论沉淀"],
-      ["一年内新品", "上架天数不超过365天", "判断新品进入速度"],
-      ["榜单权益", "Best Seller、Amazon's Choice、New Release、Coupon", "判断平台推荐与促销状态"],
-      ["内容配置", "A+页面、视频、品牌故事、SP广告、品牌广告等导出字段", "检查商品内容成熟度"],
-    ];
-    const formulas = [
-      ["排名变化", "上期BSR − 本期BSR", "正数表示上升，负数表示下降"],
-      ["指标变化率", "（本期值 − 上期值）÷ 上期值", "上期缺失或为0时显示暂无数据"],
-      ["品牌价格带单元格", "该品牌在该价格带内的月销量 ÷ 当前榜单Top N月销量", "颜色越深，占全榜单销量越高"],
-      ["进入友好度原值", "品牌分散度 × 65% ＋ 一年内新品占比 × 35%", "品牌越分散、新品越多，原值越高"],
-      ["综合机会分", "市场规模45%＋销量需求25%＋增长15%＋进入友好度15%", "各项先在当前所选站点中做0–100线性归一化"],
-      ["人民币换算", `站点原币金额 × 对应CNY汇率（汇率日 ${dashboardData.exchangeRates.date}）`, "跨站点页面强制统一人民币"],
+      ["Top10 / Top20 / Top30 / Top50", "决定页面显示榜单前多少名商品。比如Top20就是只看前20名。"],
+      ["BSR", "Amazon的商品排名。数字越小，排名越靠前；第1名最好。"],
+      ["ASIN", "Amazon给每个商品的编号，可以把它理解成商品的身份证。"],
+      ["月销量", "工具估算这个商品一个月大约卖了多少件。"],
+      ["月销售额", "工具估算这个商品一个月大约卖了多少钱。"],
+      ["销量加权均价", "用月销售额除以月销量，代表这些商品更接近实际销售情况的平均价格。"],
+      ["市场份额", "一个品牌或商品在当前榜单中占了多大比例。"],
+      ["榜单权益", "商品是否有Best Seller、Amazon's Choice、New Release或Coupon等标识。"],
+      ["一年内新品", "上架时间不超过一年的商品。"],
+      ["— / Unknown", "“—”表示没有这项数据；Unknown表示暂时没有识别出品牌。"],
     ];
     return <div className="guide-page">
       <section className="guide-hero">
-        <div className="guide-hero-copy"><span>READ THIS FIRST</span><h2>先确认口径，再解释结果</h2><p>本看板分析的是指定日期、指定Amazon站点、指定细分类目下的Best Sellers Top N商品快照。它适合比较榜单结构、品牌竞争和商品变化，不代表Amazon全站销量，也不等同于财务审计口径。</p><nav className="guide-jump" aria-label="数据指南目录"><a href="#guide-grain">数据层级</a><a href="#guide-filters">筛选器</a><a href="#guide-pages">页面用途</a><a href="#guide-metrics">指标字典</a><a href="#guide-rules">计算规则</a><a href="#guide-quality">使用边界</a></nav></div>
-        <div className="guide-grain-card"><GitBranch /><small>最小分析单元</small><strong>1 个 ASIN × 1 个日期 × 1 个站点 × 1 个品类</strong><div><span>日期快照</span><i>→</i><span>站点</span><i>→</i><span>品类</span><i>→</i><span>Top N</span><i>→</i><span>ASIN</span></div><p>品牌、价格带和市场指标均由这一层逐级汇总。</p></div>
+        <div className="guide-hero-copy"><span>第一次使用看这里</span><h2>这个看板，是用来快速看市场和竞品的</h2><p>你可以用它查看不同国家、不同清洁家电品类的Amazon榜单，了解哪些品牌和商品卖得好、价格是多少，以及最近的排名变化。不需要先懂数据分析，先选好国家和品类，再从“总览”开始看就可以。</p><nav className="guide-jump" aria-label="数据指南目录"><a href="#guide-start">第一次怎么用</a><a href="#guide-filters">顶部筛选</a><a href="#guide-pages">各个模块</a><a href="#guide-charts">图表怎么看</a><a href="#guide-words">常见名词</a><a href="#guide-questions">我该去哪里看</a></nav></div>
+        <div className="guide-grain-card"><BookOpen /><small>最简单的使用方法</small><strong>选国家 → 选品类 → 选Top范围 → 看总览</strong><div><span>选站点</span><i>→</i><span>选品类</span><i>→</i><span>选Top N</span><i>→</i><span>看结果</span></div><p>不知道点哪里时，按照这个顺序操作即可。</p></div>
       </section>
 
-      <section className="guide-panel" id="guide-grain"><PanelTitle index="01" title="数据颗粒度与汇总层级" note={`${marketplaces.length} 个站点 · ${categoryOptions.length} 个品类 · Top10/20/30/50`} /><div className="guide-levels">
-        <article><b>01</b><span>日期层</span><strong>一次采集快照</strong><p>每个数据日期代表一次导出结果。周度变化使用当前日期与此前最近一期同站点、同品类数据比较。</p></article>
-        <article><b>02</b><span>榜单层</span><strong>站点 × 品类</strong><p>一份榜单对应一个Amazon国家站点和一个细分类目。不同国家分类边界可能不同，不能默认完全同质。</p></article>
-        <article><b>03</b><span>视图层</span><strong>Top 10 / 20 / 30 / 50</strong><p>Top N决定参与计算的商品范围。切换Top N会同步改变合计、份额、均价、图表与综合评分。</p></article>
-        <article><b>04</b><span>商品层</span><strong>ASIN快照</strong><p>一行对应一个ASIN在该榜单当期的状态。同一ASIN跨站点或跨日期会作为不同快照参与分析。</p></article>
-        <article><b>05</b><span>聚合层</span><strong>品牌 / 价格带 / 站点</strong><p>品牌份额、价格分布和跨站点机会均由筛选后的ASIN集合汇总，不额外引入榜外商品。</p></article>
+      <section className="guide-panel" id="guide-start"><PanelTitle index="01" title="第一次打开，按这四步操作" note="不需要设置其他内容" /><div className="guide-levels beginner-steps">
+        <article><b>01</b><span>选择国家</span><strong>先选Amazon站点</strong><p>例如美国站、英国站、德国站或日本站。你想研究哪个国家，就选哪个。</p></article>
+        <article><b>02</b><span>选择产品</span><strong>再选清洁家电品类</strong><p>可以选择除螨仪、布艺清洗机、洗地机、扫地机器人或吸尘器。</p></article>
+        <article><b>03</b><span>选择范围</span><strong>决定看前多少名</strong><p>第一次建议选择Top50，信息最完整；只想快速看头部商品时可以选Top10。</p></article>
+        <article><b>04</b><span>开始浏览</span><strong>先进入“总览”</strong><p>先看市场整体情况，再根据你的问题进入品牌、产品或周度异动页面。</p></article>
       </div></section>
 
-      <section className="guide-panel" id="guide-filters"><PanelTitle index="02" title="全局筛选器怎么影响数据" note="除数据指南外，筛选条件在业务页面间同步" /><div className="guide-filter-grid">
-        <article><span>站点</span><strong>决定Amazon市场与原币</strong><p>美国USD、英国GBP、欧盟站EUR、日本JPY；“全部站点”仅在支持跨站点汇总的页面出现。</p></article>
-        <article><span>品类</span><strong>决定榜单边界</strong><p>除螨仪、布艺清洗机、洗地机、扫地机器人、吸尘器。各国Amazon类目并非完全一致。</p></article>
-        <article><span>数据日期</span><strong>决定当前快照</strong><p>选择本期数据；周度异动自动寻找此前最近一期同站点、同品类数据。</p></article>
-        <article><span>金额单位</span><strong>原币或统一人民币</strong><p>原币适合单站点观察；人民币适合跨站点横向比较。数量、评分和排名不受币种切换影响。</p></article>
-        <article><span>Top N</span><strong>决定所有汇总范围</strong><p>Top10/20/30/50不是分页，而是分析样本上限。多数KPI、份额与图表都会随之重新计算。</p></article>
-        <article><span>重置</span><strong>恢复默认分析状态</strong><p>清除搜索、品牌筛选、权益筛选和临时隐藏，并恢复默认站点、品类、日期、Top50与原币。</p></article>
+      <section className="guide-panel" id="guide-filters"><PanelTitle index="02" title="顶部这些按钮是什么意思" note="这些选择会同时影响各个业务页面" /><div className="guide-filter-grid">
+        <article><span>站点</span><strong>选择国家</strong><p>决定你现在看美国、英国、德国、法国、意大利、西班牙还是日本的Amazon数据。</p></article>
+        <article><span>品类</span><strong>选择产品类型</strong><p>决定你现在看除螨仪、布艺清洗机、洗地机、扫地机器人还是吸尘器。</p></article>
+        <article><span>数据日期</span><strong>选择哪一次更新的数据</strong><p>一般直接选择最新日期；想查看以前的情况时，再切换到旧日期。</p></article>
+        <article><span>金额单位</span><strong>选择显示什么货币</strong><p>看单个国家时可以用当地货币；比较多个国家时可以统一看人民币。</p></article>
+        <article><span>Top10 / 20 / 30 / 50</span><strong>选择看榜单前多少名</strong><p>数字越大，看到的商品越多。切换后，页面上的图表和数字也会跟着变化。</p></article>
+        <article><span>重置</span><strong>恢复最初状态</strong><p>如果你改了很多选择，不知道怎么恢复，点击“重置”即可。</p></article>
       </div></section>
 
-      <section className="guide-panel" id="guide-pages"><PanelTitle index="03" title="各页面解决什么问题" note="从问题出发选择页面，而不是逐页浏览" /><div className="guide-page-grid">{pageGuide.map((item) => <article key={item.title}><header><span>{item.index}</span><strong>{item.title}</strong></header><h3>{item.purpose}</h3><dl><div><dt>重点看</dt><dd>{item.focus}</dd></div><div><dt>适合用在</dt><dd>{item.use}</dd></div></dl></article>)}</div></section>
+      <section className="guide-panel" id="guide-pages"><PanelTitle index="03" title="左侧每个模块是干什么的" note="按照你想解决的问题选择页面" /><div className="guide-page-grid">{pageGuide.map((item) => <article key={item.title}><header><span>{item.index}</span><strong>{item.title}</strong></header><h3>{item.purpose}</h3><dl><div><dt>里面有</dt><dd>{item.focus}</dd></div><div><dt>什么时候看</dt><dd>{item.use}</dd></div></dl></article>)}</div></section>
 
-      <section className="guide-panel" id="guide-metrics"><PanelTitle index="04" title="核心指标字典" note="定义 + 用途" /><div className="guide-table-wrap"><table className="guide-table"><thead><tr><th>指标</th><th>口径与定义</th><th>主要用途</th></tr></thead><tbody>{glossary.map((row) => <tr key={row[0]}><th>{row[0]}</th><td>{row[1]}</td><td>{row[2]}</td></tr>)}</tbody></table></div></section>
-
-      <section className="guide-panel"><PanelTitle index="05" title="图表怎么读" note="颜色用于区分与强调，不代表绝对好坏" /><div className="guide-chart-grid">
-        <article><BarChart3 /><strong>横向 / 纵向条形图</strong><p>比较不同品牌、商品、站点或价格带的绝对值及占比。条越长，当前指标越高。</p></article>
-        <article><CircleDollarSign /><strong>价格带图</strong><p>统一使用细分区间。USD/EUR/GBP在200以上继续拆分为200–249、250–299、300–349、350–399、400–499、500+；人民币与日元按相应尺度细分。</p></article>
-        <article><Layers3 /><strong>热力图</strong><p>颜色越深代表单元格贡献越高。品牌×价格段热力图固定最多展示月销量最高的5个品牌。</p></article>
-        <article><Activity /><strong>气泡 / 散点图</strong><p>横轴、纵轴与气泡大小分别代表不同指标。品牌定位图中：横轴月销量、纵轴均价、气泡大小月销售额。</p></article>
-        <article><History /><strong>周度变化图</strong><p>只比较两期都有或任一期出现的同一ASIN。新进榜和跌出榜按当前所选Top N边界判断。</p></article>
-        <article><EyeOff /><strong>临时隐藏与补位</strong><p>隐藏后该商品仅在本次浏览中排除，后续商品自动上移补位；刷新网页后恢复，不会改写源数据。</p></article>
+      <section className="guide-panel" id="guide-charts"><PanelTitle index="04" title="常见图表怎么看" note="记住下面几句话就够了" /><div className="guide-chart-grid">
+        <article><BarChart3 /><strong>条形图</strong><p>条越长，代表这个品牌、商品或国家对应的数字越大。直接比较条的长短即可。</p></article>
+        <article><CircleDollarSign /><strong>价格带图</strong><p>把商品按照价格分组，帮助你看哪个价位的商品卖得更多或销售额更高。</p></article>
+        <article><Layers3 /><strong>热力图</strong><p>颜色越深，代表这个位置的数据越高。适合看品牌主要集中在哪些价格段。</p></article>
+        <article><Activity /><strong>气泡图</strong><p>每个圆点代表一个品牌或商品。圆点越大，通常代表销售额越高；把鼠标放上去可以看详情。</p></article>
+        <article><History /><strong>上升和下降</strong><p>绿色或向上的箭头表示表现变好；红色或向下的箭头表示表现下降。</p></article>
+        <article><EyeOff /><strong>暂时不看某个商品</strong><p>点击小眼睛可以临时隐藏不相关商品，下面的商品会自动补上；刷新网页后会恢复。</p></article>
       </div></section>
 
-      <section className="guide-panel" id="guide-rules"><PanelTitle index="06" title="关键计算规则" note="看清分母和比较对象" /><div className="guide-formulas">{formulas.map((row) => <article key={row[0]}><Scale /><div><strong>{row[0]}</strong><code>{row[1]}</code><p>{row[2]}</p></div></article>)}</div></section>
+      <section className="guide-panel" id="guide-words"><PanelTitle index="05" title="页面里常见的词是什么意思" note="用最简单的话解释" /><div className="guide-table-wrap"><table className="guide-table beginner-table"><thead><tr><th>页面上的词</th><th>简单理解</th></tr></thead><tbody>{glossary.map((row) => <tr key={row[0]}><th>{row[0]}</th><td>{row[1]}</td></tr>)}</tbody></table></div></section>
 
-      <section className="guide-panel" id="guide-quality"><PanelTitle index="07" title="数据来源、缺失值与使用边界" note="结论输出前必须检查" /><div className="guide-quality-grid">
-        <article className="guide-quality-lead"><CircleHelp /><div><strong>看板是市场监控工具，不是财务审计系统</strong><p>销量、销售额、增长率等经营指标来自SellerSprite导出数据或其估算字段；Amazon BSR用于排名观察，两者都应结合类目口径、采集日期与业务经验解释。</p></div></article>
-        <article><ListChecks /><div><strong>类目边界</strong><p>部分国家没有完全对应的细分类目，页面出现橙色提示时，排名、商品覆盖和市场规模只能作为替代榜单参考。</p></div></article>
-        <article><ListChecks /><div><strong>缺失与Unknown</strong><p>“—”表示源文件缺少或无法计算；Unknown表示品牌字段未被可靠识别，不应直接当作真实品牌参与结论。</p></div></article>
-        <article><ListChecks /><div><strong>跨站点比较</strong><p>金额必须统一人民币，且应使用相同数据日期、品类和Top N。不同国家榜单定义仍可能造成结构偏差。</p></div></article>
-        <article><ListChecks /><div><strong>周度比较</strong><p>只有同站点、同品类且存在上一期快照时才计算；源数据字段异常会传导到变化率，因此异常峰值需回看商品详情与源文件。</p></div></article>
-        <article><ListChecks /><div><strong>价格与均价</strong><p>价格来自当期导出值，可能受促销或变体影响；平均价格是简单平均，不能解释为按销量加权的真实成交价。</p></div></article>
+      <section className="guide-panel" id="guide-questions"><PanelTitle index="06" title="我想知道这些问题，应该去哪里看" note="直接找到对应模块" /><div className="guide-question-grid">
+        <article><span>我想快速知道这个市场怎么样</span><strong>去“总览”</strong></article>
+        <article><span>我想看Amazon榜单第1到第50名</span><strong>去“榜单追踪”</strong></article>
+        <article><span>我想比较美国、英国、德国哪个机会更好</span><strong>去“机会对比”</strong></article>
+        <article><span>我想知道哪个品牌卖得最好</span><strong>去“品牌”</strong></article>
+        <article><span>我想查看某个商品的价格、销量和链接</span><strong>去“产品”或“榜单追踪”</strong></article>
+        <article><span>我想知道本周哪些商品排名变化最大</span><strong>去“周度异动”</strong></article>
+        <article><span>我刚上传了数据，想确认网站有没有读取</span><strong>去“数据覆盖”</strong></article>
       </div></section>
 
-      <section className="guide-workflow"><BookOpen /><div><span>推荐阅读顺序</span><strong>先看总览判断结构 → 用品牌页定位竞争者 → 用产品页验证具体ASIN → 用周度异动追踪变化 → 最后回到数据覆盖检查完整性</strong></div></section>
+      <section className="guide-workflow"><BookOpen /><div><span>第一次使用推荐顺序</span><strong>选择站点和品类 → 打开总览 → 看品牌 → 看具体产品 → 下次更新数据后看周度异动</strong></div></section>
     </div>;
   };
 
